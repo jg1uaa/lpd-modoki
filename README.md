@@ -3,7 +3,7 @@
 ---
 ## Description
 
-A pseudo lpd-alike application to get printer image data.
+An lpd-alike application to get printer image data.
 
 **Not intended to be used with public or IPv6-based network.**
 
