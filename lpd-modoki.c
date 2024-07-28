@@ -10,6 +10,7 @@
 
 extern char *optarg;
 
+static int fd;
 static int port = 515;
 static char *queue = NULL;
 static char *file = NULL;
@@ -109,6 +110,8 @@ fin1:
 		fclose(fp);
 fin0:
 	/* quit */
+	close(d);
+	close(fd);
 	exit(0);
 }
 
@@ -213,7 +216,7 @@ fin0:
 
 static int do_main(char *ipstr)
 {
-	int fd, d, en, rv = -1;
+	int d, en, rv = -1;
 	struct sockaddr_in addr, peer;
 	socklen_t peer_len;
 
