@@ -57,14 +57,17 @@ static int recv_until_lf(int d)
 static int receive_control_file(int d, long long count)
 {
 	int len;
-	long long c;
+	long long c, remain;
 
 	/* discard */
 	for (c = 0; c < count; c += len) {
-		if ((len = recv_until_lf(d)) < 0)
+		remain = count - c;
+		if (remain > BUFSIZE) remain = BUFSIZE;
+
+		if ((len = read(d, buf, remain)) < 1) {
+			fprintf(stderr, "receive_control_file: read\n");
 			return -1;
-		if (debug)
-			fprintf(stderr, "%s\n", buf);
+		}
 	}
 	send_ack(d);
 
