@@ -68,6 +68,9 @@ static int receive_control_file(int d, long long count)
 			fprintf(stderr, "receive_control_file: read\n");
 			return -1;
 		}
+
+		if (debug)
+			fprintf(stderr, "%s", buf);
 	}
 	send_ack(d);
 
