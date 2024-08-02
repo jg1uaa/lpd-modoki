@@ -233,7 +233,7 @@ static int do_main(char *ipstr)
 	}
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = inet_addr(ipstr);
+	addr.sin_addr.s_addr = (ipstr == NULL) ? INADDR_ANY : inet_addr(ipstr);
 	addr.sin_port = htons(port);
 
 	/* wait for connect */
@@ -271,7 +271,7 @@ fin0:
 
 int main(int argc, char *argv[])
 {
-	int ch;
+	int ch, help = 0;
 	char *ipstr = NULL;
 	char *appname = argv[0];
 
@@ -292,12 +292,15 @@ int main(int argc, char *argv[])
 		case 'd':
 			debug = 1;
 			break;
+		default:
+			help = 1;
+			break;
 		}
 	}
 
-	if (ipstr == NULL) {
-		fprintf(stderr, "usage: %s -a [ip address] -p [(portnum)] "
-			"-q [(queue)] -f[(filename)]\n", appname);
+	if (help) {
+		fprintf(stderr, "usage: %s -a [ip address] -p [portnum] "
+			"-q [queue] -f[filename]\n", appname);
 		return -1;
 	}
 

@@ -12,14 +12,16 @@ An lpd-alike application to get printer image data.
 
 ```
 # lpd-modoki
-lpd-modoki -a [ip address] -p [(portnum)] -q [(queue)] -f[(filename)]
+lpd-modoki -a [ip address] -p [portnum] -q [queue] -f[filename]
 #
 ```
+
+As default, listen at 0.0.0.0 (INADDR_ANY), port 515, any queue accepted and use stdout.
 
 ### Example
 
 ```
-# lpd-modoki -a 192.168.0.1 | gpcl6 -dNOPAUSE -sDEVICE=pdfimage24 -sOutputFile=output.pdf -
+# lpd-modoki | gpcl6 -dNOPAUSE -sDEVICE=pdfimage24 -sOutputFile=output.pdf -
 ```
 
 ## Limitation
