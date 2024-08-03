@@ -222,7 +222,7 @@ fin0:
 
 static int do_main(char *ipstr)
 {
-	int d, en, rv = -1;
+	int d, en = 1, rv = -1;
 	struct sockaddr_in addr, peer;
 	socklen_t peer_len;
 
@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
 
 	if (help) {
 		fprintf(stderr, "usage: %s -a [ip address] -p [portnum] "
-			"-q [queue] -f[filename]\n", appname);
+			"-q [queue] -f [filename]\n", appname);
 		return -1;
 	}
 
