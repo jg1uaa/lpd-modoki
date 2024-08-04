@@ -54,9 +54,9 @@ static int recv_until_lf(int d)
 	return i;
 }
 
-static int receive_control_file(int d, long long count)
+static int recv_control_file(int d, long long count)
 {
-	int len;
+	int len, rv = -1;
 	long long c, remain;
 
 	/* discard */
@@ -65,22 +65,31 @@ static int receive_control_file(int d, long long count)
 		if (remain > BUFSIZE) remain = BUFSIZE;
 
 		if ((len = read(d, buf, remain)) < 1) {
-			fprintf(stderr, "receive_control_file: read\n");
-			return -1;
+			fprintf(stderr, "recv_control_file: read\n");
+			goto fin0;
 		}
 
 		if (debug)
 			fprintf(stderr, "%s", buf);
 	}
+
+	/* check transfer complete */
+	if (recv_cmd(d)) {
+		fprintf(stderr, "recv_control_file: recv_cmd\n");
+		goto fin0;
+	}
+
 	send_ack(d);
 
 	if (debug)
 		fprintf(stderr, "%lld bytes received\n", c);
 
-	return 0;
+	rv = 0;
+fin0:
+	return rv;
 }
 
-static int receive_data_file(int d, long long count)
+static int recv_data_file(int d, long long count)
 {
 	int len;
 	long long c, remain;
@@ -88,7 +97,7 @@ static int receive_data_file(int d, long long count)
 
 	fp = (file != NULL) ? fopen(file, "w") : stdout;
 	if (fp == NULL) {
-		fprintf(stderr, "receive_data_file: fopen NULL\n");
+		fprintf(stderr, "recv_data_file: fopen NULL\n");
 		goto fin0;
 	}
 
@@ -98,11 +107,18 @@ static int receive_data_file(int d, long long count)
 		if (remain > BUFSIZE) remain = BUFSIZE;
 
 		if ((len = read(d, buf, remain)) < 1) {
-			fprintf(stderr, "receive_data_file: read\n");
+			fprintf(stderr, "recv_data_file: read\n");
 			goto fin1;
 		}
 		fwrite(buf, len, 1, fp);
 	}
+
+	/* check transfer complete */
+	if (recv_cmd(d)) {
+		fprintf(stderr, "recv_control_file: recv_cmd\n");
+		goto fin1;
+	}
+
 	send_ack(d);
 
 	if (debug)
@@ -130,10 +146,6 @@ static int do_command2_loop(int d)
 		if ((subcmd = recv_cmd(d)) < 0)
 			goto fin0;
 
-		/* ignore subcommand 0x00 (invalid?) */
-		if (!subcmd)
-			continue;
-
 		if ((len = recv_until_lf(d)) < 0)
 			goto fin0;
 
@@ -152,12 +164,12 @@ static int do_command2_loop(int d)
 			break;
 		case 0x02:
 			send_ack(d);
-			if (receive_control_file(d, count) < 0)
+			if (recv_control_file(d, count) < 0)
 				goto fin0;
 			break;
 		case 0x03:
 			send_ack(d);
-			if (receive_data_file(d, count) < 0)
+			if (recv_data_file(d, count) < 0)
 				goto fin0;
 			break;
 		default:
