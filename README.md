@@ -3,7 +3,7 @@
 ---
 ## Description
 
-An lpd-alike application to get printer image data.
+An lpd-alike application to receive printer image data.
 
 **Not intended to be used with public or IPv6-based network.**
 
@@ -11,12 +11,12 @@ An lpd-alike application to get printer image data.
 ## Usage
 
 ```
-# lpd-modoki
-lpd-modoki -a [ip address] -p [portnum] -q [queue] -f[filename]
+# lpd-modoki -h
+usage: lpd-modoki -a [ip address] -p [portnum] -q [queue] -f[filename]
 #
 ```
 
-As default, listen at 0.0.0.0 (INADDR_ANY), port 515, any queue accepted and use stdout.
+As default, listen at 0.0.0.0 (INADDR_ANY), port 515, any queue accepted and use stdout. To show help message, use -h option.
 
 ### Example
 

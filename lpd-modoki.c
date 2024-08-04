@@ -275,7 +275,7 @@ int main(int argc, char *argv[])
 	char *ipstr = NULL;
 	char *appname = argv[0];
 
-	while ((ch = getopt(argc, argv, "p:a:q:f:d")) != -1) {
+	while ((ch = getopt(argc, argv, "p:a:q:f:dh")) != -1) {
 		switch (ch) {
 		case 'p':
 			port = atoi(optarg);
@@ -292,6 +292,7 @@ int main(int argc, char *argv[])
 		case 'd':
 			debug = 1;
 			break;
+		case 'h':
 		default:
 			help = 1;
 			break;
