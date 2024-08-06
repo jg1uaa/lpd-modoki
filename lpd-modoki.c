@@ -14,6 +14,7 @@ static int fd;
 static int port = 515;
 static char *queue = NULL;
 static char *file = NULL;
+static int multi = 0;
 static int debug = 0;
 
 #define BUFSIZE 16384
@@ -54,100 +55,63 @@ static int recv_until_lf(int d)
 	return i;
 }
 
-static int recv_control_file(int d, long long count)
+static int recv_file(int d, FILE *fp, long long count, int disp)
 {
 	int len, rv = -1;
 	long long c, remain;
 
-	/* discard */
 	for (c = 0; c < count; c += len) {
 		remain = count - c;
 		if (remain > BUFSIZE) remain = BUFSIZE;
 
 		if ((len = read(d, buf, remain)) < 1) {
-			fprintf(stderr, "recv_control_file: read\n");
+			fprintf(stderr, "recv_file: read\n");
 			goto fin0;
 		}
 
-		if (debug)
+		if (debug && disp)
 			fprintf(stderr, "%s", buf);
+
+		if (fp != NULL)
+			fwrite(buf, len, 1, fp);
 	}
 
 	/* check transfer complete */
 	if (recv_cmd(d)) {
-		fprintf(stderr, "recv_control_file: recv_cmd\n");
+		fprintf(stderr, "recv_file: recv_cmd\n");
 		goto fin0;
 	}
 
 	send_ack(d);
 
-	if (debug)
-		fprintf(stderr, "%lld bytes received\n", c);
+	if (debug) {
+		fprintf(stderr, "%lld bytes %s\n",
+			c, (fp == NULL) ? "discarded" : "received");
+	}
 
 	rv = 0;
 fin0:
 	return rv;
 }
 
-static int recv_data_file(int d, long long count)
+static int do_command2_loop(int d)
 {
-	int len;
-	long long c, remain;
+	int subcmd, len, once = 1;
+	long long count;
 	FILE *fp;
 
 	fp = (file != NULL) ? fopen(file, "w") : stdout;
 	if (fp == NULL) {
-		fprintf(stderr, "recv_data_file: fopen NULL\n");
+		fprintf(stderr, "do_command2_loop: fopen NULL\n");
 		goto fin0;
 	}
 
-	/* receive */
-	for (c = 0; c < count; c += len) {
-		remain = count - c;
-		if (remain > BUFSIZE) remain = BUFSIZE;
-
-		if ((len = read(d, buf, remain)) < 1) {
-			fprintf(stderr, "recv_data_file: read\n");
-			goto fin1;
-		}
-		fwrite(buf, len, 1, fp);
-	}
-
-	/* check transfer complete */
-	if (recv_cmd(d)) {
-		fprintf(stderr, "recv_control_file: recv_cmd\n");
-		goto fin1;
-	}
-
-	send_ack(d);
-
-	if (debug)
-		fprintf(stderr, "%lld bytes received\n", c);
-
-	/* wait for close from host */
-	while (recv_cmd(d) >= 0);
-
-fin1:
-	if (file != NULL)
-		fclose(fp);
-fin0:
-	/* quit */
-	close(d);
-	close(fd);
-	exit(0);
-}
-
-static int do_command2_loop(int d)
-{
-	int subcmd, len;
-	long long count;
-
 	while (1) {
 		if ((subcmd = recv_cmd(d)) < 0)
-			goto fin0;
+			goto fin1;
 
 		if ((len = recv_until_lf(d)) < 0)
-			goto fin0;
+			goto fin1;
 
 		if (debug) {
 			fprintf(stderr,
@@ -164,13 +128,15 @@ static int do_command2_loop(int d)
 			break;
 		case 0x02:
 			send_ack(d);
-			if (recv_control_file(d, count) < 0)
-				goto fin0;
+			if (recv_file(d, NULL, count, 1) < 0)
+				goto fin1;
 			break;
 		case 0x03:
 			send_ack(d);
-			if (recv_data_file(d, count) < 0)
-				goto fin0;
+			if (recv_file(d, (multi || once) ? fp : NULL,
+				      count, 0) < 0)
+				goto fin1;
+			once = 0;
 			break;
 		default:
 			send_nak(d);
@@ -178,8 +144,14 @@ static int do_command2_loop(int d)
 		}
 	}
 
+fin1:
+	if (file != NULL)
+		fclose(fp);
 fin0:
-	return -1;
+	/* quit */
+	close(d);
+	close(fd);
+	exit(0);
 }
 
 static int is_invalid_queue(void)
@@ -287,7 +259,7 @@ int main(int argc, char *argv[])
 	char *ipstr = NULL;
 	char *appname = argv[0];
 
-	while ((ch = getopt(argc, argv, "p:a:q:f:dh")) != -1) {
+	while ((ch = getopt(argc, argv, "p:a:q:f:mdh")) != -1) {
 		switch (ch) {
 		case 'p':
 			port = atoi(optarg);
@@ -300,6 +272,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'f':
 			file = optarg;
+			break;
+		case 'm':
+			multi = 1;
 			break;
 		case 'd':
 			debug = 1;
