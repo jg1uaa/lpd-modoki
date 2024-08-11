@@ -16,6 +16,7 @@ static char *queue = NULL;
 static char *file = NULL;
 static int multi = 0;
 static int debug = 0;
+static int stream = 0;
 
 #define BUFSIZE 16384
 static unsigned char buf[BUFSIZE];
@@ -59,15 +60,21 @@ static int recv_until_lf(int d)
 
 static int recv_file(int d, FILE *fp, long long count, int disp)
 {
-	int len, rv = -1;
+	int len, s, rv = -1;
 	long long c, remain;
 
-	for (c = 0; c < count; c += len) {
-		remain = min(BUFSIZE, count - c);
+	s = count < 0;
+
+	for (c = 0; s || c < count; c += len) {
+		remain = s ? BUFSIZE : min(BUFSIZE, count - c);
 
 		if ((len = read(d, buf, remain)) < 1) {
-			fprintf(stderr, "recv_file: read\n");
-			goto fin0;
+			if (s) {
+				break;
+			} else {
+				fprintf(stderr, "recv_file: read\n");
+				goto fin0;
+			}
 		}
 
 		if (debug && disp) {
@@ -79,13 +86,15 @@ static int recv_file(int d, FILE *fp, long long count, int disp)
 			fwrite(buf, len, 1, fp);
 	}
 
-	/* check transfer complete */
-	if (recv_cmd(d)) {
-		fprintf(stderr, "recv_file: recv_cmd\n");
-		goto fin0;
-	}
+	if (!s) {
+		/* check transfer complete */
+		if (recv_cmd(d)) {
+			fprintf(stderr, "recv_file: recv_cmd\n");
+			goto fin0;
+		}
 
-	send_ack(d);
+		send_ack(d);
+	}
 
 	if (debug) {
 		fprintf(stderr, "%lld bytes %s\n",
@@ -135,11 +144,17 @@ static int do_command2_loop(int d)
 				goto fin1;
 			break;
 		case 0x03:
-			send_ack(d);
-			if (recv_file(d, (multi || once) ? fp : NULL,
-				      count, 0) < 0)
+			if (!stream && !count) {
+				send_nak(d);
 				goto fin1;
-			once = 0;
+			} else {
+				send_ack(d);
+				if (recv_file(d, (multi || once) ? fp : NULL,
+					      (stream && !count) ? -1 : count,
+					      0) < 0)
+					goto fin1;
+				once = 0;
+			}
 			break;
 		default:
 			send_nak(d);
@@ -258,7 +273,7 @@ int main(int argc, char *argv[])
 	char *ipstr = NULL;
 	char *appname = argv[0];
 
-	while ((ch = getopt(argc, argv, "p:a:q:f:mdh")) != -1) {
+	while ((ch = getopt(argc, argv, "p:a:q:f:mdsh")) != -1) {
 		switch (ch) {
 		case 'p':
 			port = atoi(optarg);
@@ -274,9 +289,14 @@ int main(int argc, char *argv[])
 			break;
 		case 'm':
 			multi = 1;
+			stream = 0;
 			break;
 		case 'd':
 			debug = 1;
+			break;
+		case 's':
+			multi = 0;
+			stream = 1;
 			break;
 		case 'h':
 		default:
