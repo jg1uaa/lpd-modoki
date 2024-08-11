@@ -23,6 +23,8 @@ static unsigned char buf[BUFSIZE];
 #define send_ack(d)	send_response(d, 0)
 #define send_nak(d)	send_response(d, 1)
 
+#define min(a, b)	(((a) < (b)) ? (a) : (b))
+
 static int send_response(int d, int nak)
 {
 	unsigned char rsp = nak;
@@ -61,16 +63,17 @@ static int recv_file(int d, FILE *fp, long long count, int disp)
 	long long c, remain;
 
 	for (c = 0; c < count; c += len) {
-		remain = count - c;
-		if (remain > BUFSIZE) remain = BUFSIZE;
+		remain = min(BUFSIZE, count - c);
 
 		if ((len = read(d, buf, remain)) < 1) {
 			fprintf(stderr, "recv_file: read\n");
 			goto fin0;
 		}
 
-		if (debug && disp)
+		if (debug && disp) {
+			buf[min(remain, BUFSIZE - 1)] = '\0';
 			fprintf(stderr, "%s", buf);
+		}
 
 		if (fp != NULL)
 			fwrite(buf, len, 1, fp);
