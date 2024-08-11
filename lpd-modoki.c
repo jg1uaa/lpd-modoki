@@ -172,10 +172,6 @@ static int do_command_loop(int d)
 		if ((cmd = recv_cmd(d)) < 0)
 			goto fin0;
 
-		/* ignore command 0x00 (invalid?) */
-		if (!cmd)
-			continue;
-
 		if ((len = recv_until_lf(d)) < 0)
 			goto fin0;
 
