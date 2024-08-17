@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <netdb.h>
 
 extern char *optarg;
 
@@ -218,6 +219,22 @@ fin0:
 	return -1;
 }
 
+static int get_inet_addr(in_addr_t *addr, char *hostname)
+{
+	int rv = -1;
+	struct hostent *h;
+	struct in_addr *a;
+
+	if ((h = gethostbyname(hostname)) == NULL || h->h_addrtype != AF_INET ||
+	    (a = (struct in_addr *)h->h_addr) == NULL)
+		goto fin0;
+
+	*addr = a->s_addr;
+	rv = 0;
+fin0:
+	return rv;
+}
+
 static int do_main(char *ipstr)
 {
 	int d, en = 1, rv = -1;
@@ -231,7 +248,12 @@ static int do_main(char *ipstr)
 	}
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = (ipstr == NULL) ? INADDR_ANY : inet_addr(ipstr);
+	if (ipstr == NULL) {
+		addr.sin_addr.s_addr = INADDR_ANY;
+	} else if (get_inet_addr(&addr.sin_addr.s_addr, ipstr)) {
+		fprintf(stderr, "do_main: get_inet_addr\n");
+		goto fin1;
+	}
 	addr.sin_port = htons(port);
 
 	/* wait for connect */
