@@ -20,7 +20,7 @@ static int debug = 0;
 static int stream = 0;
 
 #define BUFSIZE 16384
-static unsigned char buf[BUFSIZE];
+static char buf[BUFSIZE];
 
 #define send_ack(d)	send_response(d, 0)
 #define send_nak(d)	send_response(d, 1)
