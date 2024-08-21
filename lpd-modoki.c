@@ -11,7 +11,6 @@
 
 extern char *optarg;
 
-static int fd;
 static int port = 515;
 static char *queue = NULL;
 static char *file = NULL;
@@ -107,7 +106,39 @@ fin0:
 	return rv;
 }
 
-static int do_command2_loop(int d)
+static int create_socket(struct sockaddr_in *addr, char *hostname, int port)
+{
+	int s;
+	struct hostent *h;
+	struct in_addr *a;
+
+	if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+		goto fin0;
+
+	memset(addr, 0, sizeof(*addr));
+
+	if (hostname == NULL)
+		addr->sin_addr.s_addr = INADDR_ANY;
+	else if ((h = gethostbyname(hostname)) != NULL &&
+		 h->h_addrtype == AF_INET &&
+		 (a = (struct in_addr *)h->h_addr) != NULL)
+		addr->sin_addr.s_addr = a->s_addr;
+	else
+		addr->sin_addr.s_addr = INADDR_NONE;
+
+	if (addr->sin_addr.s_addr == INADDR_NONE) {
+		close(s);
+		s = -1;
+		goto fin0;
+	}
+
+	addr->sin_port = htons(port);
+	addr->sin_family = AF_INET;
+fin0:
+	return s;
+}
+
+static void do_command2_loop(int d)
 {
 	int subcmd, len, once = 1;
 	long long count;
@@ -145,7 +176,7 @@ static int do_command2_loop(int d)
 				goto fin1;
 			break;
 		case 0x03:
-			if (!stream && !count) {
+			if (stream ? (count < 0) : (count <= 0)) {
 				send_nak(d);
 				goto fin1;
 			} else {
@@ -167,10 +198,7 @@ fin1:
 	if (file != NULL)
 		fclose(fp);
 fin0:
-	/* quit */
-	close(d);
-	close(fd);
-	exit(0);
+	return;
 }
 
 static int is_invalid_queue(void)
@@ -183,9 +211,22 @@ static int is_invalid_queue(void)
 	return (queue == NULL) ? 0 : strcmp(buf, queue);
 }
 
-static int do_command_loop(int d)
+static int do_command_loop(int fd)
 {
-	int cmd, len;
+	int cmd, len, d;
+	struct sockaddr_in peer;
+	socklen_t peer_len;
+
+	peer_len = sizeof(peer);
+	if ((d = accept(fd, (struct sockaddr *)&peer, &peer_len)) < 0) {
+		fprintf(stderr, "do_main: accept\n");
+		return -1;
+	}
+
+	if (debug) {
+		fprintf(stderr, "connected from %s port %d\n",
+			inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
+	}
 
 	while (1) {
 		if ((cmd = recv_cmd(d)) < 0)
@@ -206,55 +247,31 @@ static int do_command_loop(int d)
 
 		/* only accept command 02, "Receive a printer job" */
 		switch (cmd) {
-		case 0x02:
-			send_ack(d);
-			return do_command2_loop(d);
 		default:
 			send_nak(d);
 			break;
+		case 0x02:
+			send_ack(d);
+			do_command2_loop(d);
+			goto fin0;
 		}
 	}
 
 fin0:
-	return -1;
-}
-
-static int get_inet_addr(in_addr_t *addr, char *hostname)
-{
-	int rv = -1;
-	struct hostent *h;
-	struct in_addr *a;
-
-	if ((h = gethostbyname(hostname)) == NULL || h->h_addrtype != AF_INET ||
-	    (a = (struct in_addr *)h->h_addr) == NULL)
-		goto fin0;
-
-	*addr = a->s_addr;
-	rv = 0;
-fin0:
-	return rv;
+	close(d);
+	return 0;
 }
 
 static int do_main(char *ipstr)
 {
-	int d, en = 1, rv = -1;
-	struct sockaddr_in addr, peer;
-	socklen_t peer_len;
+	int fd, en = 1, rv = -1;
+	struct sockaddr_in addr;
 
 	/* create socket */
-	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		fprintf(stderr, "do_main: socket\n");
+	if ((fd = create_socket(&addr, ipstr, port)) < 0) {
+		fprintf(stderr, "do_main: create_socket\n");
 		goto fin0;
 	}
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	if (ipstr == NULL) {
-		addr.sin_addr.s_addr = INADDR_ANY;
-	} else if (get_inet_addr(&addr.sin_addr.s_addr, ipstr)) {
-		fprintf(stderr, "do_main: get_inet_addr\n");
-		goto fin1;
-	}
-	addr.sin_port = htons(port);
 
 	/* wait for connect */
 	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &en, sizeof(en));
@@ -268,21 +285,7 @@ static int do_main(char *ipstr)
 		goto fin1;
 	}
 
-	peer_len = sizeof(peer);
-	if ((d = accept(fd, (struct sockaddr *)&peer, &peer_len)) < 0) {
-		fprintf(stderr, "do_main: accept\n");
-		goto fin1;
-	}
-
-	if (debug) {
-		fprintf(stderr, "connected from %s port %d\n",
-			inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
-	}
-
-	do_command_loop(d);
-	rv = 0;
-
-	close(d);
+	rv = do_command_loop(fd);
 fin1:
 	close(fd);
 fin0:
